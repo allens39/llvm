@@ -1815,9 +1815,9 @@ EVT X86TargetLowering::getSetCCResultType(const DataLayout &DL,
     if (LegalVT.getSimpleVT().isVector() && Subtarget.hasVLX()) {
       // If we legalized to less than a 512-bit vector, then we will use a vXi1
       // compare for vXi32/vXi64 for sure. If we have BWI we will also support
-      // vXi16/vXi8.
+      // vXi16/vXi8 (disabled).
       MVT EltVT = LegalVT.getSimpleVT().getVectorElementType();
-      if (Subtarget.hasBWI() || EltVT.getSizeInBits() >= 32)
+      if (EltVT.getSizeInBits() >= 32)
         return EVT::getVectorVT(Context, MVT::i1, NumElts);
     }
   }
@@ -18281,8 +18281,6 @@ static SDValue LowerVSETCC(SDValue Op, const X86Subtarget &Subtarget,
   if (VT.getVectorElementType() == MVT::i1) {
     // In AVX-512 architecture setcc returns mask with i1 elements,
     // But there is no compare instruction for i8 and i16 elements in KNL.
-    assert((VTOp0.getScalarSizeInBits() >= 32 || Subtarget.hasBWI()) &&
-           "Unexpected operand type");
     return LowerIntVSETCC_AVX512(Op, DAG);
   }
 
@@ -32744,7 +32742,8 @@ static SDValue combineSelect(SDNode *N, SelectionDAG &DAG,
   // Make sure we extend these even before type legalization gets a chance to
   // split wide vectors.
   // Since SKX these selects have a proper lowering.
-  if (Subtarget.hasAVX512() && !Subtarget.hasBWI() && CondVT.isVector() &&
+  if (Subtarget.hasAVX512() && CondVT.isVector() &&
+      (!Subtarget.hasBWI() || !CondVT.is512BitVector()) &&
       CondVT.getVectorElementType() == MVT::i1 &&
       VT.getVectorNumElements() > 4 &&
       (VT.getVectorElementType() == MVT::i8 ||
@@ -38539,7 +38538,8 @@ static SDValue combineSetCC(SDNode *N, SelectionDAG &DAG,
   // during type legalization.
   // NOTE: The element count check is to ignore operand types that need to
   // go through type promotion to a 128-bit vector.
-  if (Subtarget.hasAVX512() && !Subtarget.hasBWI() && VT.isVector() &&
+  if (Subtarget.hasAVX512() && VT.isVector() &&
+      (!Subtarget.hasBWI() || !VT.is512BitVector()) &&
       VT.getVectorElementType() == MVT::i1 && VT.getVectorNumElements() > 4 &&
       (OpVT.getVectorElementType() == MVT::i8 ||
        OpVT.getVectorElementType() == MVT::i16)) {
